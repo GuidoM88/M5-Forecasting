@@ -12,7 +12,9 @@ Questo progetto usa il dataset M5 di Walmart (42.840 serie di vendite), e gli ob
 ## Setup
 
 pip install -r requirements.txt
+
 python src/data/download.py
+
 jupyter notebook notebooks/
 
 ## Struttura
