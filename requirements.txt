@@ -1,0 +1,36 @@
+# Data manipulation
+pandas==2.1.4
+numpy==1.26.2
+
+# Time series forecasting
+statsforecast==1.7.0
+nixtla==0.1.28
+lightgbm==4.1.0
+
+# Conformal predictions
+mapie==0.8.3
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+plotly==5.18.0
+
+# API
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.5.3
+
+# MLOps
+mlflow==2.10.0
+pyyaml==6.0.1
+
+# Testing
+pytest==7.4.4
+
+# Jupyter
+jupyter==1.0.0
+ipykernel==6.29.0
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
