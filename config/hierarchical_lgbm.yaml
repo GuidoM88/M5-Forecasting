@@ -1,0 +1,77 @@
+# Configuration for Hierarchical LightGBM Forecasting
+project:
+  name: "M5 Hierarchical Forecasting"
+  version: "1.0.0"
+
+paths:
+  raw_data: "data/raw"
+  models: "models/hierarchical_lgbm"      
+  output: "outputs/forecasts" 
+  
+data:
+  history_days: 90
+  test_horizon: 28
+  
+features:
+  lags: [7, 14, 28]
+  rolling_windows: [7, 14, 28]
+  
+  base_features:
+    - "wday"
+    - "month"
+    - "year"
+    - "is_weekend"
+    - "snap"
+    - "sell_price"
+    - "state_id_enc"
+    - "store_id_enc"
+    - "dept_id_enc"
+    - "item_id_enc"
+  
+  categorical_features:
+    - "state_id"
+    - "store_id"
+    - "dept_id"
+    - "item_id"
+  
+  hierarchical_levels:
+    - name: "bottom"
+      groupby: ["id"]
+      prefix: "b"
+    - name: "item"
+      groupby: ["item_id"]
+      prefix: "it"
+    - name: "dept_store"
+      groupby: ["dept_id", "store_id"]
+      prefix: "ds"
+    - name: "state_store"
+      groupby: ["state_id", "store_id"]
+      prefix: "ss"
+
+model:
+  type: "lightgbm"
+  params:
+    objective: "poisson"
+    metric: "rmse"
+    learning_rate: 0.08
+    num_leaves: 31
+    max_depth: 8
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    verbose: -1
+    n_jobs: -1
+  
+  training:
+    num_boost_round: 20
+    early_stopping_rounds: null
+    num_models: 28  # Non-recursive: one model per horizon
+
+evaluation:
+  metric: "wrmsse"
+
+output:
+  save_forecasts: true
+  save_models: false
+  forecast_filename: "forecasts.pkl"
+  summary_filename: "summary.pkl"
