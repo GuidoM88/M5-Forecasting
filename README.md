@@ -134,12 +134,24 @@ Feature Engineering Levels: Bottom-level (b_) Individual product-store time seri
 ## Performance Metrics
 
 WRMSSE: 0.6140
+
 Training Time: ~30 min (M1 Mac)
+
 Prediction Time: <2 sec
 
 ## Tech Stack
 
-Framework: Python 3.10, ML: LightGBM Pandas NumPy, MLOps: MLflow, API: FastAPI Uvicorn, Containerization: Docker Docker-Compose, Config: YAML
+Framework: Python 3.10; 
+
+ML: LightGBM Pandas NumPy; 
+
+MLOps: MLflow, 
+
+API: FastAPI Uvicorn; 
+
+Containerization: Docker Docker-Compose; 
+
+Config: YAML;
 
 ## Development
 
