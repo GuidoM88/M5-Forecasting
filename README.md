@@ -12,48 +12,47 @@ End-to-end production-ready time series forecasting system for retail sales pred
 ## Project Structure
 
 multivariate-retail-forecasting/
-├── api/                          REST API for model serving
-│   ├── __init__.py
-│   ├── main.py                  FastAPI application
-│   ├── schemas.py               Pydantic models for validation
-│   └── predictor.py             Model serving logic
-├── config/                       YAML configurations
-│   └── hierarchical_lgbm.yaml   Model and training parameters
-├── data/                         Data directory (gitignored)
-│   ├── raw/                     M5 CSV files (calendar, sell_prices, sales)
-│   ├── baseline_results/
-│   ├── conformal_results/
-│   ├── lightgbm_results/
-│   ├── multihorizon_results/
-│   ├── predictability_results/
-│   ├── tsb_results/
-│   └── ttm_results/
-├── mlruns/                       MLflow experiment tracking (gitignored)
-├── models/                       Saved model artifacts (gitignored)
-├── notebooks/                    Jupyter notebooks for exploration
-│   └── 08_hierarchical_LGBM.ipynb
-├── outputs/                      Model predictions and results (gitignored)
-│   └── forecasts/
-│       ├── forecasts.pkl
-│       └── summary.pkl
-├── scripts/                      Execution scripts
-│   ├── train_hierarchical_lgbm.py      Standard training
-│   └── train_with_mlflow.py            Training with MLflow tracking
-├── src/                          Core package
-│   ├── __init__.py
-│   ├── config.py                Configuration management
-│   ├── data_loader.py           M5 data loading and preprocessing
-│   ├── evaluation.py            WRMSSE metric calculation
-│   ├── feature_engineering.py   Lag/rolling features at multiple levels
-│   └── model.py                 Hierarchical LightGBM implementation
-├── .gitignore                    Git ignore rules
-├── Dockerfile                    Docker containerization
-├── docker-compose.yml            Docker orchestration
-├── README.md                     Project documentation (this file)
-├── README_DOCKER.md              Docker deployment guide
-├── requirements.txt              Python dependencies
-└── setup.py                      Package installation configuration
-
+├── api/ REST API for model serving
+│ ├── init.py
+│ ├── main.py FastAPI application
+│ ├── schemas.py Pydantic models for validation
+│ └── predictor.py Model serving logic
+├── config/ YAML configurations
+│ └── hierarchical_lgbm.yaml Model and training parameters
+├── data/ Data directory (gitignored)
+│ ├── raw/ M5 CSV files (calendar, sell_prices, sales)
+│ ├── baseline_results/
+│ ├── conformal_results/
+│ ├── lightgbm_results/
+│ ├── multihorizon_results/
+│ ├── predictability_results/
+│ ├── tsb_results/
+│ └── ttm_results/
+├── mlruns/ MLflow experiment tracking (gitignored)
+├── models/ Saved model artifacts (gitignored)
+├── notebooks/ Jupyter notebooks for exploration
+│ └── 08_hierarchical_LGBM.ipynb
+├── outputs/ Model predictions and results (gitignored)
+│ └── forecasts/
+│ ├── forecasts.pkl
+│ └── summary.pkl
+├── scripts/ Execution scripts
+│ ├── train_hierarchical_lgbm.py Standard training
+│ └── train_with_mlflow.py Training with MLflow tracking
+├── src/ Core package
+│ ├── init.py
+│ ├── config.py Configuration management
+│ ├── data_loader.py M5 data loading and preprocessing
+│ ├── evaluation.py WRMSSE metric calculation
+│ ├── feature_engineering.py Lag/rolling features at multiple levels
+│ └── model.py Hierarchical LightGBM implementation
+├── .gitignore Git ignore rules
+├── Dockerfile Docker containerization
+├── docker-compose.yml Docker orchestration
+├── README.md Project documentation (this file)
+├── README_DOCKER.md Docker deployment guide
+├── requirements.txt Python dependencies
+└── setup.py Package installation configuration
 
 ## Features
 
