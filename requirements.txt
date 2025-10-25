@@ -1,35 +1,43 @@
-# Data manipulation
+# Core Data Science
 pandas==2.1.4
 numpy==1.26.2
-
-# Time series forecasting
-statsforecast==1.7.0
-nixtla==0.7.0
-
-# Conformal predictions
-mapie==0.8.3
-
-# Visualization
 matplotlib==3.8.2
 seaborn==0.13.0
 plotly==5.18.0
+
+# Machine Learning
+scikit-learn==1.7.1
+lightgbm==4.6.0
+xgboost==3.0.5
+catboost==1.2.8
+MAPIE==0.8.3
+
+# Time Series Forecasting
+statsforecast==1.7.0
+statsmodels==0.14.5
+prophet==1.1.7
+skforecast==0.18.0
+
+# Deep Learning (per Tiny Time Mixer e TSB)
+torch==2.5.1
+pytorch-lightning==2.5.5
+transformers==4.35.2
+
+# MLOps
+mlflow==2.10.0
 
 # API
 fastapi==0.109.0
 uvicorn==0.27.0
 pydantic==2.5.3
-
-# MLOps
-mlflow==2.10.0
-pyyaml==6.0.1
-
-# Testing
-pytest==7.4.4
-
-# Jupyter
-jupyter==1.0.0
-ipykernel==6.29.0
+python-multipart==0.0.20
 
 # Utilities
-python-dotenv==1.0.0
-requests==2.31.0
+pyyaml==6.0.1
+tqdm==4.67.1
+requests==2.32.5
+joblib==1.5.2
+
+# Jupyter (development)
+jupyter==1.0.0
+ipykernel==6.29.0
