@@ -11,7 +11,8 @@ End-to-end production-ready time series forecasting system for retail sales pred
 
 ## Project Structure
 
-multivariate-retail-forecasting/
+M5-Forecasting
+```
 ├── api/ REST API for model serving
 │ ├── init.py
 │ ├── main.py FastAPI application
@@ -53,7 +54,7 @@ multivariate-retail-forecasting/
 ├── README_DOCKER.md Docker deployment guide
 ├── requirements.txt Python dependencies
 └── setup.py Package installation configuration
-
+```
 ## Features
 
 Model Architecture: Bottom-level features (per product-store), Item-level aggregated features, Department-store cross features, State-store aggregated features, Lag features (7, 14, 28 days), Rolling mean features (7, 14, 28 days)
