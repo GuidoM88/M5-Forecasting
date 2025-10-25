@@ -68,13 +68,18 @@ Requirements: Python 3.10+
 Setup:
 
 git clone https://github.com/YOUR_USERNAME/multivariate-retail-forecasting.git
+
 cd multivariate-retail-forecasting
+
 conda create -n mlops_env python=3.10
+
 conda activate mlops_env
+
 pip install -r requirements.txt
+
 pip install -e .
 
-Data Setup: Download M5 competition data from Kaggle and place in data/raw/ (calendar.csv, sell_prices.csv, sales_train_evaluation.csv)
+python src/data/download.py 
 
 ## Usage
 
@@ -128,7 +133,7 @@ Feature Engineering Levels: Bottom-level (b_) Individual product-store time seri
 
 ## Performance Metrics
 
-WRMSSE: 0.6171
+WRMSSE: 0.6140
 Training Time: ~30 min (M1 Mac)
 Prediction Time: <2 sec
 
@@ -159,14 +164,6 @@ See README_DOCKER.md for detailed Docker instructions.
 ## Contributing
 
 This project follows MLOps best practices: Modular code structure, Reproducible experiments with MLflow, Configuration management, API-first deployment, Containerization
-
-## License
-
-MIT License
-
-## Author
-
-Guido Morgante - Data Scientist
 
 ## Acknowledgments
 
