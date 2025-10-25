@@ -145,7 +145,7 @@ Framework: Python 3.10;
 
 ML: LightGBM Pandas NumPy; 
 
-MLOps: MLflow, 
+MLOps: MLflow;
 
 API: FastAPI Uvicorn; 
 
@@ -153,25 +153,13 @@ Containerization: Docker Docker-Compose;
 
 Config: YAML;
 
-## Development
-
-Code Quality: Modular package structure, Type hints, Comprehensive logging, YAML configuration, Clean separation of concerns
-
-Testing:
-
-pytest tests/
 
 ## Docker
 
-Build and run:
+Build and run: docker-compose up --build
 
-docker-compose up --build
+Stop: docker-compose down
 
-Stop:
-
-docker-compose down
-
-See README_DOCKER.md for detailed Docker instructions.
 
 ## Contributing
 
