@@ -67,7 +67,7 @@ Requirements: Python 3.10+
 
 Setup:
 
-git clone https://github.com/YOUR_USERNAME/multivariate-retail-forecasting.git
+git clone https://github.com/GuidoM88/multivariate-retail-forecasting.git
 
 cd multivariate-retail-forecasting
 
