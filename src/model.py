@@ -1,145 +1,71 @@
-"""Hierarchical LightGBM model for M5 forecasting - DEBUG VERSION."""
-import pandas as pd
-import numpy as np
-import lightgbm as lgb
+"""Direct horizon models with the same information cutoff at fit and predict time."""
+import json
 from pathlib import Path
-from typing import Dict, List
-from tqdm import tqdm
-import gc
+import lightgbm as lgb
+import numpy as np
+import pandas as pd
 
 
 class HierarchicalLGBM:
-    """Train multiple LightGBM models for hierarchical forecasting."""
-    
-    def __init__(
-        self, 
-        params: Dict, 
-        num_boost_round: int,
-        num_models: int = 28
-    ):
-        """
-        Initialize hierarchical LightGBM trainer.
-        
-        Parameters
-        ----------
-        params : Dict
-            LightGBM parameters
-        num_boost_round : int
-            Number of boosting rounds
-        num_models : int
-            Number of models to train (one per forecast horizon)
-        """
-        self.params = params
+    def __init__(self, params, num_boost_round, num_models=28, shared_model=False):
+        self.params = dict(params)
         self.num_boost_round = num_boost_round
         self.num_models = num_models
         self.models = {}
-        
-    def train(
-        self, 
-        train_df: pd.DataFrame, 
-        feature_names: List[str]
-    ) -> None:
-        """
-        Train one model per forecast horizon (non-recursive).
-        
-        Parameters
-        ----------
-        train_df : pd.DataFrame
-            Training dataframe with features and target
-        feature_names : List[str]
-            List of feature column names
-        """
-        print(f"Training {self.num_models} models...")
-        
-        # Identify lag and rolling features
-        lag_roll_feats = [f for f in feature_names 
-                         if "_lag_" in f or "_roll_" in f]
-                
-        for h in tqdm(range(1, self.num_models + 1)):
-            # Shift lag/rolling features by h for horizon h
-            Xh = train_df.copy()
-            grp = Xh.groupby("id", sort=False)
-            
-            for col in lag_roll_feats:
-                Xh[col] = grp[col].shift(h).values
-            
-            # Drop rows with NaN features
-            Xh = Xh.dropna(subset=feature_names)
-            
-            # Prepare data
-            y = Xh["sales"].values
-            X = Xh[feature_names].values
-                        
-            # Train model
-            dtrain = lgb.Dataset(X, y)
-            
+        self.shared_model = shared_model
+        self.feature_names = []
+
+    @staticmethod
+    def horizon_features(frame, feature_names, horizon):
+        """At target t, sales features refer to origin t-h (never later)."""
+        frame = frame.sort_values(['id', 'date'])
+        X = frame[feature_names].copy()
+        dynamic = [c for c in feature_names if '_lag_' in c or '_roll_' in c]
+        X[dynamic] = frame.groupby('id', sort=False)[dynamic].shift(horizon - 1)
+        return X
+
+    def train(self, train_df, feature_names):
+        self.models = {}
+        self.feature_names = list(feature_names)
+        train_df = train_df.sort_values(['id', 'date'])
+        for h in ([self.num_models] if self.shared_model else range(1, self.num_models + 1)):
+            X = self.horizon_features(train_df, feature_names, h)
+            # Keep missing prices: LightGBM handles NaN. Require usable sales history.
+            dynamic = [c for c in feature_names if '_lag_' in c or '_roll_' in c]
+            valid = X[dynamic].notna().all(axis=1) & train_df.sales.notna()
+            if not valid.any():
+                raise ValueError(f'Insufficient training history for horizon {h}')
             self.models[h] = lgb.train(
-                params=self.params,
-                train_set=dtrain,
+                self.params, lgb.Dataset(X.loc[valid], label=train_df.loc[valid, 'sales']),
                 num_boost_round=self.num_boost_round,
-                valid_sets=[dtrain],
-                valid_names=["train"],
-                callbacks=[lgb.log_evaluation(period=0)]
+                callbacks=[lgb.log_evaluation(0)],
             )
-            
-            del Xh, X, y, dtrain
-            gc.collect()
-        
-    
-    def predict(
-        self, 
-        test_df: pd.DataFrame, 
-        feature_names: List[str]
-    ) -> pd.DataFrame:
-        """
-        Generate predictions for test period.
-        
-        Parameters
-        ----------
-        test_df : pd.DataFrame
-            Test dataframe
-        feature_names : List[str]
-            List of feature column names
-            
-        Returns
-        -------
-        pd.DataFrame
-            Predictions in wide format (30490 x 28)
-        """
-        print(f"Predicting {self.num_models} days...")
-        
-        test_days = sorted(test_df["date"].unique())
-        
-        assert len(test_days) >= self.num_models
-        test_days = test_days[:self.num_models]
-        
-        pred_list = []
-        
-        for h, day in tqdm(list(zip(range(1, self.num_models + 1), test_days))):
-            Xtest = test_df[test_df["date"] == day].copy()
-            Xmat = Xtest[feature_names].fillna(0).values
-            
-            pred = self.models[h].predict(Xmat)
-            
-            out = Xtest[["id"]].copy()
-            out["h"] = h
-            out["forecast"] = np.clip(pred, 0, None)
-            
-            pred_list.append(out)
-        
-        # Pivot to wide format
-        pred_all = pd.concat(pred_list, axis=0)
-        
-        # Load sales to get correct ID order
-        sales_path = Path("data/raw/sales_train_evaluation.csv")
-        sales = pd.read_csv(sales_path)
-        
-        pivot = pred_all.pivot(
-            index="id", 
-            columns="h", 
-            values="forecast"
-        ).reindex(sales["id"].tolist()).fillna(0)
-        
-        pivot.columns = [f"F{i}" for i in range(1, self.num_models + 1)]
-        
-        return pivot
+
+        if self.shared_model:
+            self.models = {h: self.models[self.num_models] for h in range(1, self.num_models + 1)}
+
+    def predict(self, data, feature_names, cutoff):
+        """data includes historical features and masked future rows, not just test."""
+        if list(feature_names) != self.feature_names or len(self.models) != self.num_models:
+            raise ValueError('Model is not trained or feature schema differs')
+        data = data[data.date >= pd.Timestamp(cutoff) - pd.Timedelta(days=self.num_models)].sort_values(['id', 'date'])
+        ids = pd.Index(sorted(data.id.unique()), name='id')
+        result = pd.DataFrame(index=ids)
+        for h in range(1, self.num_models + 1):
+            day = pd.Timestamp(cutoff) + pd.Timedelta(days=h)
+            mask = data.date.eq(day)
+            rows = data.loc[mask]
+            if len(rows) != len(ids) or rows.id.duplicated().any():
+                raise ValueError(f'Missing or duplicate series on {day.date()}')
+            X = self.horizon_features(data, feature_names, self.num_models if self.shared_model else h).loc[mask]
+            result[f'F{h}'] = pd.Series(
+                np.maximum(self.models[h].predict(X), 0), index=rows.id
+            ).reindex(ids)
+        return result
+
+    def save(self, directory):
+        directory = Path(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        for h, model in self.models.items():
+            model.save_model(str(directory / f'horizon_{h}.txt'))
+        (directory / 'features.json').write_text(json.dumps(self.feature_names))

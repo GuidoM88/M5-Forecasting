@@ -2,11 +2,11 @@ project:
   name: M5 Hierarchical Forecasting
   version: 1.0.0
 paths:
-  raw_data: ../data/raw
-  models: ../models/hierarchical_lgbm
-  output: ../outputs/forecasts
+  raw_data: ../data/demo
+  models: ../models/demo
+  output: ../outputs/demo
 data:
-  history_days: 730
+  history_days: 120
   test_horizon: 28
 features:
   lags:
@@ -59,12 +59,13 @@ model:
     bagging_fraction: 0.8
     bagging_freq: 1
     verbose: -1
-    n_jobs: 4
+    n_jobs: 1
     seed: 42
     deterministic: true
     force_col_wise: true
+    min_data_in_leaf: 5
   training:
-    num_boost_round: 200
+    num_boost_round: 5
     num_models: 28
 evaluation:
   metric: wrmsse

@@ -16,8 +16,16 @@ class Config:
         config_path : str
             Path to the YAML configuration file.
         """
-        self.config_path = Path(config_path)
+        self.config_path = Path(config_path).resolve()
         self._config = self._load_config()
+        if self.num_models != self.test_horizon or self.test_horizon < 1:
+            raise ValueError("num_models must equal the positive test_horizon")
+        if not self.lags or not self.rolling_windows or min(self.lags + self.rolling_windows) < 1:
+            raise ValueError("Lags and rolling windows must be positive")
+        if self.history_days <= max(self.lags + self.rolling_windows) + self.test_horizon:
+            raise ValueError("history_days is too short for features and horizon")
+        if self.num_boost_round < 1:
+            raise ValueError("num_boost_round must be positive")
         
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML file."""
@@ -58,12 +66,12 @@ class Config:
     @property
     def raw_data_path(self) -> Path:
         """Get raw data directory path."""
-        return Path(self.get('paths.raw_data'))
+        return self.resolve_path('paths.raw_data')
     
     @property
     def output_path(self) -> Path:
         """Get output directory path."""
-        return Path(self.get('paths.output'))
+        return self.resolve_path('paths.output')
     
     @property
     def history_days(self) -> int:
@@ -114,3 +122,11 @@ class Config:
     def num_models(self) -> int:
         """Get number of models to train (one per horizon)."""
         return self.get('model.training.num_models')
+
+    def resolve_path(self, key):
+        path = Path(self.get(key))
+        return path if path.is_absolute() else self.config_path.parent / path
+
+    @property
+    def models_path(self):
+        return self.resolve_path('paths.models')

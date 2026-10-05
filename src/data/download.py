@@ -1,30 +1,28 @@
-import os
+"""Download after accepting M5 competition rules and configuring Kaggle credentials."""
+import argparse
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
-def download_m5_dataset():
-    """Download M5 dataset from Kaggle"""
-    
-    # Create data directory if not exists
-    data_dir = Path("data/raw")
-    data_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("Downloading M5 dataset from Kaggle...")
-    os.system("kaggle competitions download -c m5-forecasting-accuracy -p data/raw")
-    
-    # Unzip files
-    print("Extracting files...")
-    zip_file = data_dir / "m5-forecasting-accuracy.zip"
-    
-    if zip_file.exists():
-        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-            zip_ref.extractall(data_dir)
-        
-        # Remove zip file
-        zip_file.unlink()
-        print(f"Dataset downloaded successfully in {data_dir}")
-    else:
-        print("Error: zip file not found")
 
-if __name__ == "__main__":
-    download_m5_dataset()
+def download_m5_dataset(data_dir='data/raw'):
+    if shutil.which('kaggle') is None:
+        raise RuntimeError('Install the download extra: pip install -e ".[download]"')
+    data_dir = Path(data_dir).resolve()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['kaggle', 'competitions', 'download', '-c', 'm5-forecasting-accuracy',
+                    '-p', str(data_dir)], check=True)
+    archive = data_dir / 'm5-forecasting-accuracy.zip'
+    with zipfile.ZipFile(archive) as zipped:
+        for member in zipped.infolist():
+            if not (data_dir / member.filename).resolve().is_relative_to(data_dir):
+                raise ValueError('Unsafe archive path')
+        zipped.extractall(data_dir)
+    print(f'Dataset extracted to {data_dir}')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', default='data/raw')
+    download_m5_dataset(parser.parse_args().output)

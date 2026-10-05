@@ -1,4 +1,4 @@
-"""Feature engineering for hierarchical forecasting - DEBUG VERSION."""
+"""Feature engineering for hierarchical forecasting."""
 import pandas as pd
 import numpy as np
 from typing import List, Dict
@@ -21,7 +21,7 @@ class FeatureEngineer:
         assert "sales" in df.columns, "Column 'sales' required"
                 
         # Encode categorical variables
-        df = self._encode_categorical(df)
+        df = self._encode_categorical(df.copy())
         
         # Create date features
         df = self._create_date_features(df)
@@ -35,12 +35,12 @@ class FeatureEngineer:
         """Encode categorical features."""
         for col in ["state_id", "store_id", "dept_id", "item_id"]:
             if col in df.columns:
-                df[f"{col}_enc"] = pd.factorize(df[col])[0]
+                df[f"{col}_enc"] = pd.factorize(df[col], sort=True)[0]
         return df
     
     def _create_date_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Create simple date-based features."""
-        df["is_weekend"] = df["wday"].isin([1, 7]).astype(int)
+        df["is_weekend"] = df["date"].dt.dayofweek.isin([5, 6]).astype(int)
         return df
     
     def _create_hierarchical_features(
@@ -112,7 +112,7 @@ class FeatureEngineer:
         # Rolling features
         for window in self.rolling_windows:
             df[f"{prefix}_roll_{window}"] = (
-                grp.shift(1).rolling(window).mean().values
+                grp.transform(lambda s: s.shift(1).rolling(window).mean()).values
             )
         
         return df

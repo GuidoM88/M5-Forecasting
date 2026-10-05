@@ -49,3 +49,11 @@ experiments/
 *.h5
 *.pt
 *.pth
+.venv/
+.pytest_cache/
+data/demo/
+data/*_results/
+data/ttm_m5_multivariate/
+data/chronos_m5_output/
+mlflow.db
+mlartifacts/

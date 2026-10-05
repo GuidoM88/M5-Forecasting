@@ -1,54 +1,28 @@
-# Docker Deployment
+# Docker API
 
-## Quick Start
+Generate artifacts before starting the service:
 
-Build and run with Docker Compose:
+```bash
+python -m pip install -e ".[api]"
+python -m scripts.make_demo_data
+python -m scripts.train_hierarchical_lgbm --config config/demo.yaml
+```
 
-docker-compose up --build
+Select the demo artifact directory, then run Compose:
 
-API will be available at: http://localhost:8000
+```bash
+# Linux/macOS
+export M5_ARTIFACT_DIR=./outputs/demo
+# PowerShell: $env:M5_ARTIFACT_DIR="./outputs/demo"
+docker compose up --build
+```
 
-## Manual Build
+Without `M5_ARTIFACT_DIR`, Compose mounts `./outputs/forecasts`, produced by the full-data config. Artifacts are mounted read-only and are not baked into the image. The image can build before artifacts exist; `/health` returns 503 until valid artifacts are present and the service is restarted.
 
-Build image:
+- API docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
+- IDs: http://localhost:8000/items
+- Logs: `docker compose logs -f api`
+- Stop: `docker compose down`
 
-docker build -t m5-forecasting-api .
-
-Run container:
-
-docker run -d --name m5-api -p 8000:8000 -v $(pwd)/outputs:/app/outputs:ro m5-forecasting-api
-
-## Test Endpoints
-
-Health check:
-
-curl http://localhost:8000/health
-
-Model info:
-
-curl http://localhost:8000/model/info
-
-Predict:
-
-curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d '{"item_ids": ["HOBBIES_1_001_CA_1_evaluation"]}'
-
-## Stop and Remove
-
-With docker-compose:
-
-docker-compose down
-
-Manually:
-
-docker stop m5-api
-docker rm m5-api
-
-## Troubleshooting
-
-View logs:
-
-docker-compose logs -f api
-
-Enter container:
-
-docker exec -it m5-forecasting-api bash
+The image installs the core/API dependencies and LightGBM's OpenMP runtime only. Its health check uses Python's standard library and fails on HTTP errors. No `curl` binary or model-training environment is required. Docker runtime validation was not available in the repair environment.

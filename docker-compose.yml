@@ -1,21 +1,8 @@
-version: '3.8'
-
 services:
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: m5-forecasting-api
+    build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./outputs:/app/outputs:ro  # Mount forecasts as read-only
-    environment:
-      - PYTHONUNBUFFERED=1
+      - ${M5_ARTIFACT_DIR:-./outputs/forecasts}:/app/outputs/forecasts:ro
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s

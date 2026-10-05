@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from typing import Tuple
-import warnings
-warnings.filterwarnings("ignore")
 
 
 class M5DataLoader:
@@ -35,7 +33,7 @@ class M5DataLoader:
             calendar[["d", "date", "wm_yr_wk", "wday", "month", "year",
                      "snap_CA", "snap_TX", "snap_WI"]],
             on="d", 
-            how="left"
+            how="left", validate="many_to_one"
         )
         long["date"] = pd.to_datetime(long["date"])
         
@@ -43,7 +41,7 @@ class M5DataLoader:
         long = long.merge(
             prices, 
             on=["store_id", "item_id", "wm_yr_wk"], 
-            how="left"
+            how="left", validate="many_to_one"
         )
                 
         # Create unified SNAP feature
@@ -58,7 +56,16 @@ class M5DataLoader:
         # Final temporal filter
         long = self._apply_temporal_filter(long)
                 
-        return long
+        if long["date"].isna().any():
+            raise ValueError("Calendar is missing sales dates")
+        dates = sorted(long["date"].unique())
+        if len(dates) != (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[0])).days + 1:
+            raise ValueError("Sales calendar must be daily and contiguous")
+        if long.duplicated(["id", "date"]).any():
+            raise ValueError("Duplicate id/date rows")
+        if long["sales"].isna().any() or (long["sales"] < 0).any():
+            raise ValueError("Sales must be nonnegative and complete")
+        return long.sort_values(["id", "date"]).reset_index(drop=True)
     
     def _load_calendar(self) -> pd.DataFrame:
         """Load calendar file."""
@@ -91,7 +98,7 @@ class M5DataLoader:
         last_date = dates.max()
                 
         # Keep history_days + test_horizon
-        keep_mask = dates >= (last_date - pd.Timedelta(days=self.history_days + self.test_horizon))
+        keep_mask = dates >= (last_date - pd.Timedelta(days=self.history_days + self.test_horizon - 1))
         keep_cols = [c for c, m in zip(d_cols, keep_mask) if m]
                 
         return pd.concat([sales[sales.columns[:6]], sales[keep_cols]], axis=1)
@@ -116,7 +123,7 @@ class M5DataLoader:
         """Apply final temporal filter to data."""
         max_date = df["date"].max()
         cut_date = max_date - pd.Timedelta(days=self.test_horizon)
-        hist_start = cut_date - pd.Timedelta(days=self.history_days)
+        hist_start = cut_date - pd.Timedelta(days=self.history_days - 1)
                 
         return df[
             (df["date"] >= hist_start) & (df["date"] <= max_date)
