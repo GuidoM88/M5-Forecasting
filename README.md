@@ -2,7 +2,38 @@
 
 A reproducible forecasting portfolio project: fixed-origin backtesting, direct LightGBM models, hierarchical sales features, twelve-level WRMSSE evaluation, and a FastAPI service for saved forecasts.
 
-**Status:** the core pipeline and API run on deterministic synthetic data and have regression tests. Full M5 training and the optional foundation-model experiments still require the dataset/model downloads and a local run. The historical **0.6140 / top 2.7%** claim has been withdrawn: the earlier implementation used holdout sales in prediction features and inconsistent horizon alignment. No corrected competition result is claimed.
+## Recorded M5 holdout result
+
+A local Windows/Conda run completed on **2026-10-06** using `config/low_memory.yaml`, covering all **30,490 product-store series** and **28 forecast days**.
+
+| Model | WRMSSE (lower is better) |
+|---|---:|
+| Direct LightGBM with hierarchical features | **0.693826** |
+| Weekly seasonal naive | 0.869701 |
+
+LightGBM reduced WRMSSE by **20.2% relative to the seasonal-naive baseline** on this holdout: `(0.8697007023 - 0.6938261223) / 0.8697007023`. This is a local backtest result, **not a Kaggle leaderboard rank or percentile**.
+
+| Run setting | Value |
+|---|---|
+| Last observed training date | 2016-04-24 |
+| Forecast / holdout dates | 2016-04-25 to 2016-05-22 |
+| Model training history | 180 days |
+| Candidate training-row cap | 500,000 per horizon; deterministic sampling |
+| Actual training rows after feature warm-up | 421,899 at horizon 1; 347,262 at horizon 28 |
+| Models / boosting rounds | 28 direct-horizon models / 200 rounds each |
+| Features | 34 |
+| Price assumption | Target-day selling prices known in advance |
+| WRMSSE scale / weights | Full pre-cutoff history / last 28 training days of dollar sales |
+
+The reported run took **391.9 seconds for training** and **918.3 seconds end to end** (about 6 min 32 s and 15 min 18 s). The loaded panel contained 6,341,920 rows and occupied 179 MiB; the feature panel occupied 863 MiB. These are table sizes, **not peak process RAM**, and timings depend on hardware and environment.
+
+Results above were transcribed from the local run's console summary. The generated forecasts, models and `summary.json` remain local and are not committed to this repository. Reproduce the run with the M5 CSVs in `data/raw/`:
+
+```bash
+python -m scripts.train_hierarchical_lgbm --config config/low_memory.yaml
+```
+
+Results are written to `outputs/low_memory/forecasts.csv` and `outputs/low_memory/summary.json`, with model files under `models/low_memory/`. This result uses one fixed holdout and has not yet been validated across multiple forecast origins. It does not establish the performance of the separate 730-day configuration or the optional foundation models.
 
 ## Quick start: no Kaggle credentials needed
 
@@ -46,16 +77,16 @@ Accept the [Kaggle competition rules](https://www.kaggle.com/competitions/m5-for
 ```bash
 python -m pip install -e ".[download]"
 python -m src.data.download
-python -m scripts.train_hierarchical_lgbm --config config/hierarchical_lgbm.yaml
+python -m scripts.train_hierarchical_lgbm --config config/low_memory.yaml
 ```
 
 Alternatively place `calendar.csv`, `sell_prices.csv`, and `sales_train_evaluation.csv` in `data/raw/`. This last file contains 1,941 observed days, not 1,969. The final 28 observed days (`d_1914`–`d_1941` for the official file) are held out. The hidden competition horizon is a different task; this pipeline does not produce a Kaggle submission.
 
-Configuration paths are resolved relative to the YAML file, independently of the working directory. With the default 730-day feature history, full M5 creates tens of millions of rows. Expect substantial RAM and training time; begin with the demo. No full-data memory or timing claim has been measured here.
+Configuration paths are resolved relative to the YAML file, independently of the working directory. The command above reproduces the configuration of the recorded result. The separate `config/hierarchical_lgbm.yaml` uses a 730-day history without a training-row cap and requires more memory; no real-data score or timing for that configuration is reported here. Begin with the demo to check the installation.
 
-## If full-data training runs out of memory
+## Memory-conscious training
 
-Update the repair branch, then use the lower-memory configuration:
+The recorded result uses the lower-memory configuration. To update the repair branch and run it:
 
 ```bash
 git pull --ff-only origin fix/reproducible-m5-pipeline
@@ -110,12 +141,12 @@ python -m mlflow ui --backend-store-uri sqlite:///mlflow.db
 
 Both CLI entry points call the same pipeline. Models are saved as LightGBM text files, forecasts as CSV, and metadata as JSON. No serving-time pickle loading is required.
 
-For full-data API serving, the default output directory is `outputs/forecasts`. See [README_DOCKER.md](README_DOCKER.md) for Docker, artifact mounts and readiness checks.
+To serve the recorded low-memory run, set `M5_OUTPUT_DIR=outputs/low_memory` before starting the API (PowerShell: `$env:M5_OUTPUT_DIR="outputs/low_memory"`). Without this setting, the API defaults to `outputs/forecasts`, produced by the separate 730-day configuration. See [README_DOCKER.md](README_DOCKER.md) for Docker, artifact mounts and readiness checks.
 
 ## Validation and limitations
 
-Regression tests cover origin/horizon alignment, isolation of rolling groups, holdout-target invariance, WRMSSE arithmetic and ID alignment, configuration consistency, API errors and saved artifacts. GitHub Actions runs tests and the synthetic demo on Python 3.10–3.12.
+The local regression suite passed 14 tests covering origin/horizon alignment, isolation of rolling groups, holdout-target invariance, WRMSSE arithmetic and ID alignment, configuration consistency, API errors, saved artifacts, chunked lookups and sampled training. GitHub Actions runs tests and the synthetic demo on Python 3.10–3.12.
 
-Full-data accuracy, ranking, real-weight TTM/Chronos execution, and Docker runtime behavior need separate validation. Model text files are saved for inspection/reuse, but the API's contract is artifact retrieval. Multi-origin model selection, production monitoring, authentication and live future inference are outside the current implementation.
+The recorded real-data run supports the single-holdout comparison above. Multi-origin accuracy, the uncapped 730-day configuration, real-weight TTM/Chronos execution, and Docker runtime behavior still need validation. No competition ranking is claimed. Model text files are saved for inspection/reuse, but the API's contract is artifact retrieval. Multi-origin model selection, production monitoring, authentication and live future inference are outside the current implementation.
 
 See [docs/REPAIR_NOTES.md](docs/REPAIR_NOTES.md) for the audit and exact verification performed.
