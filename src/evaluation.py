@@ -19,8 +19,8 @@ class M5Evaluator:
             raise ValueError('Need training history, 28 weight days, and holdout')
         self.horizon = horizon
         self.train_cols, self.test_cols = days[:-horizon], days[-horizon:]
-        self.train = self.sales[self.train_cols].to_numpy(dtype=float)
-        self.actual = self.sales[self.test_cols].to_numpy(dtype=float)
+        self.train = self.sales[self.train_cols].to_numpy(dtype=np.float32)
+        self.actual = self.sales[self.test_cols].to_numpy(dtype=np.float32)
         recent = self.sales[['id', 'item_id', 'store_id'] + self.train_cols[-28:]].melt(
             id_vars=['id', 'item_id', 'store_id'], var_name='d', value_name='units')
         recent = recent.merge(calendar[['d', 'wm_yr_wk']], on='d', how='left', validate='many_to_one')
@@ -32,6 +32,7 @@ class M5Evaluator:
             raise ValueError('Missing price for positive sales in weight window')
         recent['revenue'] = recent.units * recent.sell_price.fillna(0)
         self.revenue = recent.groupby('id').revenue.sum().reindex(self.ids).to_numpy()
+        self.sales = self.sales[['id','item_id','dept_id','cat_id','store_id','state_id']].copy()
         if self.revenue.sum() <= 0:
             raise ValueError('Weight window has no positive revenue')
 
@@ -55,14 +56,24 @@ class M5Evaluator:
             np.add.at(errors, codes, pred - self.actual)
             np.add.at(weights, codes, self.revenue)
             # Exclude differences before (and into) the first nonzero observation.
-            first = (hist != 0).argmax(axis=1)
-            valid = np.arange(hist.shape[1] - 1)[None, :] >= first[:, None]
-            scale = np.divide((np.diff(hist, axis=1)**2 * valid).sum(axis=1),
-                              valid.sum(axis=1), out=np.zeros(n), where=valid.sum(axis=1) > 0)
+            # Compute scales in small row blocks rather than several n_series x history temporaries.
+            scale = np.zeros(n)
+            for start in range(0, n, 1024):
+                block = hist[start:start+1024]
+                first = (block != 0).argmax(axis=1)
+                valid = np.arange(block.shape[1]-1)[None,:] >= first[:,None]
+                differences = np.diff(block, axis=1)
+                differences **= 2
+                differences *= valid
+                denominator = valid.sum(axis=1)
+                scale[start:start+len(block)] = np.divide(
+                    differences.sum(axis=1), denominator, out=np.zeros(len(block)), where=denominator > 0)
+            del block, differences, valid
             if ((scale == 0) & (weights > 0)).any():
                 raise ValueError('RMSSE is undefined for a positive-weight constant series')
             rmsse = np.sqrt(np.divide((errors**2).mean(axis=1), scale,
                                      out=np.zeros(n), where=scale > 0))
             scores.append(float(np.dot(weights / weights.sum(), rmsse)))
+            del hist, errors, weights
         self.level_scores = scores
         return float(np.mean(scores))

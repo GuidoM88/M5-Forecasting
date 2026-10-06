@@ -53,6 +53,19 @@ Alternatively place `calendar.csv`, `sell_prices.csv`, and `sales_train_evaluati
 
 Configuration paths are resolved relative to the YAML file, independently of the working directory. With the default 730-day feature history, full M5 creates tens of millions of rows. Expect substantial RAM and training time; begin with the demo. No full-data memory or timing claim has been measured here.
 
+## If full-data training runs out of memory
+
+Update the repair branch, then use the lower-memory configuration:
+
+```bash
+git pull --ff-only origin fix/reproducible-m5-pipeline
+python -m scripts.train_hierarchical_lgbm --config config/low_memory.yaml
+```
+
+This retains every series and the final 28-day holdout, but uses 180 training days, a deterministic sample of at most 500,000 candidate training rows per horizon (fewer after warm-up filtering), 63 histogram bins, and a 128 MiB LightGBM histogram-cache limit. It is a different training configuration, not a promise of identical accuracy or a hard process-memory limit. Sampling is from training rows only and is independent of held-out sales. Results include the row cap and actual rows used; they are saved separately in `outputs/low_memory/`.
+
+The implementation stores identifiers as categories and features as float32, reads only the requested sales window, uses chunked lookup instead of wide hierarchy merges, builds one selected training matrix at a time, and frees the feature table before WRMSSE evaluation. Progress messages distinguish loading, each feature level, each horizon, and evaluation. The full 730-day configuration remains available for machines with sufficient memory.
+
 ## Forecasting design
 
 - One model per horizon `h=1..28`; forecasts do not feed back recursively.

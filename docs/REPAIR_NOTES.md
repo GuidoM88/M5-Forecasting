@@ -38,3 +38,20 @@ Notebook restructuring is substantial: reusable computation moved into modules a
 ## Remaining validation
 
 The full licensed Kaggle dataset and TTM/Chronos model weights were not available locally. Full M5 training, leaderboard comparisons, foundation-model weight loading/execution and performance are therefore **unverified**. Docker is not installed in this environment, so the image was reviewed but not built or run. The API serves artifacts from a historical holdout, not live future inference. Interval coverage is empirical under temporal dependence.
+
+## Memory follow-up — 2026-10-06
+
+A real full-data attempt failed while pandas copied six object identifier columns in a hierarchical merge: 23,111,420 rows, requesting another 1.03 GiB allocation. The tiny initial demo had not exposed this scaling problem.
+
+The follow-up changes:
+
+- Read only the requested wide sales columns; construct the long panel directly in id/date order, with categorical identifiers and float32 sales.
+- Replace price and hierarchy-wide merges with bounded 250,000-row key lookups. Use observed category combinations only, and float32 lag/rolling features.
+- Avoid duplicate train/test panels, repeated full-table sorts, and full shifted feature matrices. Gather the needed target/source rows into one float32 training matrix; prediction gathers only the forecast-day rows.
+- Free the feature table before evaluation, and compute WRMSSE scales in 1,024-series blocks. Evaluation still uses the complete pre-cutoff history and unchanged hierarchy/weight definitions.
+- Add `config/low_memory.yaml`: 180 training days, at most 500,000 deterministically sampled candidate training rows per horizon, 63 histogram bins, and 128 MiB histogram cache. All series and all 28 holdout days remain in evaluation. The sampling/history/bin changes affect model fit and may affect accuracy; the histogram setting is not a process RAM limit.
+- Add progress messages and report the sample cap and actual training rows in JSON summaries.
+
+Verification: **14 tests passed**, including independent merge/group-shift equivalence with unused categories and missing keys, and 28-horizon sampled-training repeatability and holdout-target invariance.
+
+A separate Linux synthetic stress test used **30,490 series x 758 days = 23,111,420 rows**, all four hierarchy feature levels, and all 34 model features. Feature construction completed with a 3,176.7 MiB stored panel. The test then trained **one shared horizon-28 model, one boosting round, from at most 500,000 sampled candidates** and produced a finite 30,490 x 28 prediction table. Peak process RSS was **3,798.9 MiB**, elapsed approximately **34 seconds** in this environment. These measurements cover a synthetic feature/training/prediction stress test, not CSV loading, the complete evaluator, a 28-model/200-round M5 run, or Windows. They are not a RAM guarantee or an accuracy result for the real dataset.

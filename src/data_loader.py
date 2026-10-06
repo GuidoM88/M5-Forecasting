@@ -1,143 +1,59 @@
-"""Data loading and preprocessing"""
-import pandas as pd
-import numpy as np
+"""Load only the requested sales window and expand compact categorical identifiers."""
 from pathlib import Path
-from typing import Tuple
+import gc
+import numpy as np
+import pandas as pd
+from src.memory import ID_COLUMNS, compact_panel, add_lookup_columns
 
 
 class M5DataLoader:
-    """Load and preprocess M5 competition data."""
-    
-    def __init__(self, raw_dir: Path, history_days: int, test_horizon: int = 28):
+    def __init__(self, raw_dir, history_days, test_horizon=28):
         self.raw_dir = Path(raw_dir)
         self.history_days = history_days
         self.test_horizon = test_horizon
-        
-    def load_data(self) -> pd.DataFrame:
-        """Load and merge all M5 data files."""
-        print("Loading raw files...")
-        
-        # Load raw files
-        calendar = self._load_calendar()
-        prices = self._load_prices()
-        sales = self._load_sales()
-        
-        # Reduce sales to required time window
-        sales_small = self._filter_sales_by_date(sales, calendar)
-        
-        # Melt to long format
-        long = self._melt_sales(sales_small)
-        
-        # Merge with calendar
-        long = long.merge(
-            calendar[["d", "date", "wm_yr_wk", "wday", "month", "year",
-                     "snap_CA", "snap_TX", "snap_WI"]],
-            on="d", 
-            how="left", validate="many_to_one"
-        )
-        long["date"] = pd.to_datetime(long["date"])
-        
-        # Merge with prices
-        long = long.merge(
-            prices, 
-            on=["store_id", "item_id", "wm_yr_wk"], 
-            how="left", validate="many_to_one"
-        )
-                
-        # Create unified SNAP feature
-        long = self._create_snap_feature(long)
-        
-        # Keep only necessary columns
-        long = long[[
-            "id", "item_id", "dept_id", "cat_id", "store_id", "state_id",
-            "date", "sales", "sell_price", "wday", "month", "year", "snap"
-        ]].copy()
-        
-        # Final temporal filter
-        long = self._apply_temporal_filter(long)
-                
-        if long["date"].isna().any():
-            raise ValueError("Calendar is missing sales dates")
-        dates = sorted(long["date"].unique())
-        if len(dates) != (pd.Timestamp(dates[-1]) - pd.Timestamp(dates[0])).days + 1:
-            raise ValueError("Sales calendar must be daily and contiguous")
-        if long.duplicated(["id", "date"]).any():
-            raise ValueError("Duplicate id/date rows")
-        if long["sales"].isna().any() or (long["sales"] < 0).any():
-            raise ValueError("Sales must be nonnegative and complete")
-        return long.sort_values(["id", "date"]).reset_index(drop=True)
-    
-    def _load_calendar(self) -> pd.DataFrame:
-        """Load calendar file."""
-        return pd.read_csv(
-            self.raw_dir / "calendar.csv",
-            usecols=["date", "d", "wm_yr_wk", "wday", "month", "year",
-                    "snap_CA", "snap_TX", "snap_WI"]
-        )
-    
-    def _load_prices(self) -> pd.DataFrame:
-        """Load sell prices file."""
-        return pd.read_csv(
-            self.raw_dir / "sell_prices.csv",
-            usecols=["store_id", "item_id", "wm_yr_wk", "sell_price"]
-        )
-    
-    def _load_sales(self) -> pd.DataFrame:
-        """Load sales training evaluation file."""
-        return pd.read_csv(self.raw_dir / "sales_train_evaluation.csv")
-    
-    def _filter_sales_by_date(
-        self, 
-        sales: pd.DataFrame, 
-        calendar: pd.DataFrame
-    ) -> pd.DataFrame:
-        """Filter sales columns to required date range."""
-        d_cols = [c for c in sales.columns if c.startswith("d_")]
-        d2date = dict(zip(calendar["d"], calendar["date"]))
-        dates = pd.to_datetime([d2date[d] for d in d_cols])
-        last_date = dates.max()
-                
-        # Keep history_days + test_horizon
-        keep_mask = dates >= (last_date - pd.Timedelta(days=self.history_days + self.test_horizon - 1))
-        keep_cols = [c for c, m in zip(d_cols, keep_mask) if m]
-                
-        return pd.concat([sales[sales.columns[:6]], sales[keep_cols]], axis=1)
-    
-    def _melt_sales(self, sales: pd.DataFrame) -> pd.DataFrame:
-        """Convert sales from wide to long format."""
-        return sales.melt(
-            id_vars=["id", "item_id", "dept_id", "cat_id", "store_id", "state_id"],
-            var_name="d", 
-            value_name="sales"
-        )
-    
-    def _create_snap_feature(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create unified SNAP feature based on state."""
-        df["snap"] = 0
-        df.loc[(df["state_id"] == "CA") & (df["snap_CA"] == 1), "snap"] = 1
-        df.loc[(df["state_id"] == "TX") & (df["snap_TX"] == 1), "snap"] = 1
-        df.loc[(df["state_id"] == "WI") & (df["snap_WI"] == 1), "snap"] = 1
-        return df
-    
-    def _apply_temporal_filter(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Apply final temporal filter to data."""
-        max_date = df["date"].max()
-        cut_date = max_date - pd.Timedelta(days=self.test_horizon)
-        hist_start = cut_date - pd.Timedelta(days=self.history_days - 1)
-                
-        return df[
-            (df["date"] >= hist_start) & (df["date"] <= max_date)
-        ].copy()
-    
-    def split_train_test(
-        self, 
-        df: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Split data into train and test sets."""
-        max_date = df["date"].max()
-        cut_date = max_date - pd.Timedelta(days=self.test_horizon)
-        
-        train_df = df[df["date"] <= cut_date].copy()
-        test_df = df[df["date"] > cut_date].copy()
-        
-        return train_df, test_df
+
+    def load_data(self):
+        print('Loading raw files...', flush=True)
+        path = self.raw_dir / 'sales_train_evaluation.csv'
+        all_days = sorted([c for c in pd.read_csv(path, nrows=0) if c.startswith('d_')],
+                          key=lambda c: int(c[2:]))
+        days = all_days[-(self.history_days + self.test_horizon):]
+        sales = pd.read_csv(path, usecols=ID_COLUMNS + days,
+                            dtype={**{c:'category' for c in ID_COLUMNS}, **{c:'float32' for c in days}})
+        sales = sales.sort_values('id').reset_index(drop=True)
+        if sales.id.duplicated().any():
+            raise ValueError('Duplicate sales IDs')
+        calendar = pd.read_csv(self.raw_dir / 'calendar.csv').set_index('d').loc[days]
+        dates = pd.to_datetime(calendar.date)
+        if dates.isna().any() or not dates.diff().iloc[1:].eq(pd.Timedelta(days=1)).all():
+            raise ValueError('Sales calendar must be daily and contiguous')
+        n_series, n_days = len(sales), len(days)
+        # Build directly in id/date order; melt and a later full-table sort are unnecessary.
+        long = pd.DataFrame({c:pd.Categorical.from_codes(
+            np.repeat(sales[c].cat.codes.to_numpy(), n_days), categories=sales[c].cat.categories)
+            for c in ID_COLUMNS})
+        long['date'] = np.tile(dates.to_numpy(), n_series)
+        long['sales'] = sales[days].to_numpy(dtype=np.float32).ravel()
+        if not np.isfinite(long.sales).all() or (long.sales < 0).any():
+            raise ValueError('Sales must be finite and nonnegative')
+        del sales
+        for col in ['wm_yr_wk', 'wday', 'month', 'year']:
+            long[col] = np.tile(pd.to_numeric(calendar[col], downcast='integer').to_numpy(), n_series)
+        long['snap'] = np.zeros(len(long), dtype=np.int8)
+        for state in ['CA','TX','WI']:
+            mask = long.state_id.eq(state).to_numpy()
+            values = np.tile(calendar[f'snap_{state}'].to_numpy(dtype=np.int8), n_series)
+            long.loc[mask,'snap'] = values[mask]
+        prices = pd.read_csv(self.raw_dir / 'sell_prices.csv',
+                             dtype={'store_id':'category', 'item_id':'category', 'sell_price':'float32'})
+        add_lookup_columns(long, prices, ['store_id','item_id','wm_yr_wk'], ['sell_price'])
+        del prices, calendar
+        long.drop(columns='wm_yr_wk', inplace=True)
+        gc.collect()
+        long = compact_panel(long)
+        print(f'Loaded {len(long):,} rows; panel {long.memory_usage(deep=True).sum()/2**20:.0f} MiB', flush=True)
+        return long
+
+    def split_train_test(self, df):
+        cutoff = df.date.max() - pd.Timedelta(days=self.test_horizon)
+        return df[df.date <= cutoff].copy(), df[df.date > cutoff].copy()

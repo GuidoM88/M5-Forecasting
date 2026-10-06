@@ -1,0 +1,76 @@
+# All series; shorter history and deterministic row sampling change model fit.
+project:
+  name: M5 Hierarchical Forecasting
+  version: 1.0.0
+paths:
+  raw_data: ../data/raw
+  models: ../models/low_memory
+  output: ../outputs/low_memory
+data:
+  history_days: 180
+  test_horizon: 28
+features:
+  lags:
+  - 7
+  - 14
+  - 28
+  rolling_windows:
+  - 7
+  - 14
+  - 28
+  base_features:
+  - wday
+  - month
+  - year
+  - is_weekend
+  - snap
+  - sell_price
+  - state_id_enc
+  - store_id_enc
+  - dept_id_enc
+  - item_id_enc
+  hierarchical_levels:
+  - name: bottom
+    groupby:
+    - id
+    prefix: b
+  - name: item
+    groupby:
+    - item_id
+    prefix: it
+  - name: dept_store
+    groupby:
+    - dept_id
+    - store_id
+    prefix: ds
+  - name: state_store
+    groupby:
+    - state_id
+    - store_id
+    prefix: ss
+model:
+  type: lightgbm
+  params:
+    objective: poisson
+    metric: rmse
+    learning_rate: 0.12
+    num_leaves: 31
+    max_depth: 8
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    verbose: -1
+    n_jobs: 4
+    seed: 42
+    deterministic: true
+    force_col_wise: true
+    histogram_pool_size: 128
+    max_bin: 63
+  training:
+    num_boost_round: 200
+    num_models: 28
+    max_train_rows: 500000
+evaluation:
+  metric: wrmsse
+output:
+  save_models: true
